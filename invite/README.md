@@ -71,6 +71,19 @@ after commit. Incomplete publications, including crash-interrupted and failed wo
 must tolerate a duplicate delivery when a failure occurs after the provider has
 already accepted a message.
 
+Products may supply their own already-localized email by passing an optional
+`message` with a plain-text `subject` and `body` to
+`InvitationsClient.create(...)`. The body must contain the literal
+`{{acceptUrl}}` placeholder exactly once; Invite substitutes the accept URL at
+send time, so the secret token is never supplied by the product. Omitting
+`message` sends Invite's default English email. Invite rejects a creation whose
+subject or body is blank, whose subject contains a line break, whose body is
+missing the placeholder or contains it more than once, or whose subject
+(200 characters) or body (10000 characters) exceeds its limit. The stored
+message is part of idempotent creation: repeating `(product, requestId)` returns
+the existing invitation and keeps its original message, and the message is never
+returned by any read route.
+
 The production adapter sends through SMTP. Configure `SMTP_HOST`, `SMTP_PORT`,
 `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_AUTH`, `SMTP_STARTTLS`, `SMTP_STARTTLS_REQUIRED`,
 `SMTP_CONNECT_TIMEOUT`, `SMTP_READ_TIMEOUT`, `SMTP_WRITE_TIMEOUT`, and

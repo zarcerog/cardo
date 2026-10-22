@@ -79,6 +79,12 @@ public class Invitation extends AuditedEntity implements PersonalDataEntity {
   @Column(name = "revoked_at")
   private OffsetDateTime revokedAt;
 
+  @Column(name = "message_subject")
+  private String messageSubject;
+
+  @Column(name = "message_body")
+  private String messageBody;
+
   public Invitation(
       UUID requestId,
       String product,
@@ -89,7 +95,8 @@ public class Invitation extends AuditedEntity implements PersonalDataEntity {
       UUID invitedBy,
       URI acceptUrlBase,
       OffsetDateTime expiresAt,
-      String token) {
+      String token,
+      InvitationMessage message) {
     this.requestId = requestId;
     this.product = product;
     this.tenantId = tenantId;
@@ -100,6 +107,10 @@ public class Invitation extends AuditedEntity implements PersonalDataEntity {
     this.acceptUrlBase = acceptUrlBase.toString();
     this.expiresAt = expiresAt;
     this.token = token;
+    if (message != null) {
+      this.messageSubject = message.subject();
+      this.messageBody = message.body();
+    }
   }
 
   public boolean accept(OffsetDateTime acceptedAt) {

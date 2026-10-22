@@ -51,7 +51,8 @@ class InvitationWorkflowTest {
             "polity:polity",
             input().email(),
             input().invitedBy(),
-            input().acceptUrlBase());
+            input().acceptUrlBase(),
+            null);
 
     assertThatThrownBy(
             () ->
@@ -101,7 +102,8 @@ class InvitationWorkflowTest {
         "clinic:clinic",
         "employee@example.com",
         UUID.fromString("44444444-4444-4444-4444-444444444444"),
-        URI.create("https://clinic.example.com/invitations"));
+        URI.create("https://clinic.example.com/invitations"),
+        null);
   }
 
   private InvitationResult result(InvitationStatus status) {

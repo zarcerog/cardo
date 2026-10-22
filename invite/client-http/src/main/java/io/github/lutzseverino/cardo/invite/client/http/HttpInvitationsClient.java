@@ -5,6 +5,7 @@ import io.github.lutzseverino.cardo.invite.client.CreatedInvitation;
 import io.github.lutzseverino.cardo.invite.client.Invitation;
 import io.github.lutzseverino.cardo.invite.client.InvitationCompletion;
 import io.github.lutzseverino.cardo.invite.client.InvitationCompletionStatus;
+import io.github.lutzseverino.cardo.invite.client.InvitationMessage;
 import io.github.lutzseverino.cardo.invite.client.InvitationStatus;
 import io.github.lutzseverino.cardo.invite.client.InvitationToken;
 import io.github.lutzseverino.cardo.invite.client.InvitationsClient;
@@ -12,6 +13,7 @@ import io.github.lutzseverino.cardo.invite.client.http.generated.AcceptInvitatio
 import io.github.lutzseverino.cardo.invite.client.http.generated.CreateInvitationRequest;
 import io.github.lutzseverino.cardo.invite.client.http.generated.CreateInvitationResponse;
 import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationCompletionResponse;
+import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationMessageRequest;
 import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationResponse;
 import io.github.lutzseverino.cardo.invite.client.http.generated.InvitationTokenResponse;
 import io.github.lutzseverino.cardo.invite.client.http.generated.api.InvitationTokensApi;
@@ -38,7 +40,8 @@ final class HttpInvitationsClient implements InvitationsClient {
             .tenantResourceType(input.tenantResourceType())
             .email(input.email())
             .invitedBy(input.invitedBy())
-            .acceptUrlBase(input.acceptUrlBase());
+            .acceptUrlBase(input.acceptUrlBase())
+            .message(toMessageRequest(input.message()));
     CreateInvitationResponse response = invitations.createInvitation(request);
     return new CreatedInvitation(toInvitation(response.getInvitation()), response.getAcceptUrl());
   }
@@ -119,5 +122,12 @@ final class HttpInvitationsClient implements InvitationsClient {
         response.getCompletedAt(),
         response.getCreatedAt(),
         response.getUpdatedAt());
+  }
+
+  private InvitationMessageRequest toMessageRequest(InvitationMessage message) {
+    if (message == null) {
+      return null;
+    }
+    return new InvitationMessageRequest().subject(message.subject()).body(message.body());
   }
 }

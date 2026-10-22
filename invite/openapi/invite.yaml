@@ -257,6 +257,29 @@ components:
     InvitationStatus:
       type: string
       enum: [pending, accepted, revoked]
+    InvitationMessageRequest:
+      type: object
+      nullable: true
+      required: [subject, body]
+      description: >
+        Optional product-supplied, already-localized plain-text email. When
+        present, Invite sends this instead of its default email. The body must
+        contain the literal {{acceptUrl}} placeholder exactly once; Invite
+        substitutes the accept URL at send time so the secret token is never
+        supplied by the product.
+      properties:
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Plain-text subject. Must not contain a line break.
+          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
+        body:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: Plain-text body containing {{acceptUrl}} exactly once.
+          x-field-extra-annotation: "@jakarta.validation.constraints.NotBlank"
     CreateInvitationRequest:
       type: object
       required:
@@ -292,6 +315,8 @@ components:
           type: string
           format: uri
           description: Product-owned URL base; Invite appends the secret token as one path segment.
+        message:
+          $ref: "#/components/schemas/InvitationMessageRequest"
     InvitationCompletionStatus:
       type: string
       enum: [requested, awaiting_identity, completed, failed, revoked]

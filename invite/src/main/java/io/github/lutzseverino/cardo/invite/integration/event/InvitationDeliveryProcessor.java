@@ -35,7 +35,9 @@ class InvitationDeliveryProcessor {
     }
     sender.send(
         invitation.getInvitedEmail(),
-        invitationUrl(invitation.getAcceptUrlBase(), invitation.getToken()));
+        invitationUrl(invitation.getAcceptUrlBase(), invitation.getToken()),
+        invitation.getMessageSubject(),
+        invitation.getMessageBody());
   }
 
   private String invitationUrl(String base, String token) {

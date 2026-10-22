@@ -41,7 +41,8 @@ class InvitationServiceValidationTest {
             "clinic",
             "employee@example.com",
             UUID.randomUUID(),
-            URI.create("https://clinic.example.com/invitations"));
+            URI.create("https://clinic.example.com/invitations"),
+            null);
 
     assertThatThrownBy(() -> createInvitation.create("clinic", input))
         .isInstanceOf(ConstraintViolationException.class);
@@ -66,7 +67,8 @@ class InvitationServiceValidationTest {
             "clinic:clinic",
             "employee@example.com",
             UUID.randomUUID(),
-            URI.create("https://clinic.example.com/invitations?source=email"));
+            URI.create("https://clinic.example.com/invitations?source=email"),
+            null);
 
     assertThatThrownBy(() -> createInvitation.create("clinic", input))
         .isInstanceOf(ConstraintViolationException.class);
