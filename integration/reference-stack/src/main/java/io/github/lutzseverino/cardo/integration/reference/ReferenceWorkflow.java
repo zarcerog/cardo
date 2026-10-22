@@ -100,7 +100,8 @@ class ReferenceWorkflow {
                 ReferenceContract.TENANT_RESOURCE_TYPE,
                 state.email(),
                 state.invitedBy(),
-                acceptUrl));
+                acceptUrl,
+                null));
     store.recordCreated(
         command.invitationId(), created.invitation().id(), created.invitation().invitedUserId());
     store.completeCommand(command.id());

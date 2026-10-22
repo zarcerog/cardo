@@ -101,7 +101,7 @@ class InvitationMigrationPostgreSqlIntegrationTest {
                 while (versions.next()) {
                   values.add(versions.getString(1));
                 }
-                assertThat(values).containsExactly("1", "2", "3", "4", "5", "6");
+                assertThat(values).containsExactly("1", "2", "3", "4", "5", "6", "7");
               });
       try (var statement =
           connection.prepareStatement(

@@ -13,6 +13,7 @@ import io.github.lutzseverino.cardo.invite.config.InvitationProperties;
 import io.github.lutzseverino.cardo.invite.mapper.InvitationApplicationMapper;
 import io.github.lutzseverino.cardo.invite.model.CreateInvitationInput;
 import io.github.lutzseverino.cardo.invite.model.Invitation;
+import io.github.lutzseverino.cardo.invite.model.InvitationMessage;
 import io.github.lutzseverino.cardo.invite.provider.InvitationDelivery;
 import io.github.lutzseverino.cardo.invite.repository.InvitationProjection;
 import io.github.lutzseverino.cardo.invite.repository.InvitationRepository;
@@ -187,6 +188,48 @@ class InvitationServiceTest {
         .isEqualTo("invitation_expired");
   }
 
+  @Test
+  void idempotentCreationIgnoresADifferentMessage() {
+    InvitationDelivery delivery = mock(InvitationDelivery.class);
+    InvitationApplicationMapper mapper = mock(InvitationApplicationMapper.class);
+    InvitationRepository invitations = mock(InvitationRepository.class);
+    InvitationService invitationService =
+        new InvitationService(
+            delivery,
+            mapper,
+            new InvitationProperties(Duration.ofDays(1), Duration.ofMinutes(5)),
+            invitations);
+
+    UUID requestId = UUID.randomUUID();
+    UUID tenantId = UUID.randomUUID();
+    UUID invitedBy = UUID.randomUUID();
+    URI acceptUrlBase = URI.create("https://clinic.example.com/invitations");
+    CreateInvitationInput input =
+        new CreateInvitationInput(
+            requestId,
+            tenantId,
+            "clinic:clinic",
+            "employee@example.com",
+            invitedBy,
+            acceptUrlBase,
+            new InvitationMessage("Different subject", "Different {{acceptUrl}}"));
+
+    InvitationProjection existing = mock(InvitationProjection.class);
+    when(existing.getProduct()).thenReturn("clinic");
+    when(existing.getTenantId()).thenReturn(tenantId);
+    when(existing.getTenantResourceType()).thenReturn("clinic:clinic");
+    when(existing.getInvitedEmail()).thenReturn("employee@example.com");
+    when(existing.getInvitedBy()).thenReturn(invitedBy);
+    when(existing.getAcceptUrlBase()).thenReturn(acceptUrlBase.toString());
+    when(existing.getToken()).thenReturn("token-1");
+    when(invitations.findProjectedByProductAndRequestId("clinic", requestId))
+        .thenReturn(Optional.of(existing));
+    when(mapper.toResult(existing))
+        .thenReturn(mock(io.github.lutzseverino.cardo.invite.model.InvitationResult.class));
+
+    assertThat(invitationService.findCreated("clinic", input)).isPresent();
+  }
+
   private CreateInvitationInput input() {
     return new CreateInvitationInput(
         UUID.randomUUID(),
@@ -194,7 +237,8 @@ class InvitationServiceTest {
         "clinic:clinic",
         "user@example.com",
         UUID.randomUUID(),
-        URI.create("https://app.example.com/invitations"));
+        URI.create("https://app.example.com/invitations"),
+        null);
   }
 
   private InvitationService service(InvitationRepository invitations) {

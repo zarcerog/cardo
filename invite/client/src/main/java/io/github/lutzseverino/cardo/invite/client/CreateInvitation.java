@@ -9,4 +9,5 @@ public record CreateInvitation(
     String tenantResourceType,
     String email,
     UUID invitedBy,
-    URI acceptUrlBase) {}
+    URI acceptUrlBase,
+    InvitationMessage message) {}

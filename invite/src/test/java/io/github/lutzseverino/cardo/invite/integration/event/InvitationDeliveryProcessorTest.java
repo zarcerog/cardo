@@ -33,7 +33,8 @@ class InvitationDeliveryProcessorTest {
 
     processor(sender, invitations).deliver(new InvitationDeliveryRequested(invitationId));
 
-    verify(sender).send("employee@example.com", "https://clinic.example.com/invitations/token-1");
+    verify(sender)
+        .send("employee@example.com", "https://clinic.example.com/invitations/token-1", null, null);
   }
 
   @Test
@@ -81,6 +82,31 @@ class InvitationDeliveryProcessorTest {
         .deliver(new InvitationDeliveryRequested(invitationId));
 
     verifyNoInteractions(sender);
+  }
+
+  @Test
+  void sendsTheStoredProductMessageWhenPresent() {
+    InvitationSender sender = mock(InvitationSender.class);
+    InvitationRepository invitations = mock(InvitationRepository.class);
+    InvitationProjection invitation = mock(InvitationProjection.class);
+    UUID invitationId = UUID.randomUUID();
+    when(invitations.findProjectedById(invitationId)).thenReturn(Optional.of(invitation));
+    when(invitation.getStatus()).thenReturn(InvitationStatus.PENDING);
+    when(invitation.getExpiresAt()).thenReturn(OffsetDateTime.now().plusDays(1));
+    when(invitation.getInvitedEmail()).thenReturn("employee@example.com");
+    when(invitation.getAcceptUrlBase()).thenReturn("https://clinic.example.com/invitations");
+    when(invitation.getToken()).thenReturn("token-1");
+    when(invitation.getMessageSubject()).thenReturn("Unase");
+    when(invitation.getMessageBody()).thenReturn("Pulse {{acceptUrl}}");
+
+    processor(sender, invitations).deliver(new InvitationDeliveryRequested(invitationId));
+
+    verify(sender)
+        .send(
+            "employee@example.com",
+            "https://clinic.example.com/invitations/token-1",
+            "Unase",
+            "Pulse {{acceptUrl}}");
   }
 
   private InvitationDeliveryProcessor processor(

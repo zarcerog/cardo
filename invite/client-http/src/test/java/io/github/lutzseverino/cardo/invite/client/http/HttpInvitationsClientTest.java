@@ -11,6 +11,7 @@ import io.github.lutzseverino.cardo.authorization.keycloak.KeycloakClientCredent
 import io.github.lutzseverino.cardo.invite.client.CreateInvitation;
 import io.github.lutzseverino.cardo.invite.client.InvitationCompletion;
 import io.github.lutzseverino.cardo.invite.client.InvitationCompletionStatus;
+import io.github.lutzseverino.cardo.invite.client.InvitationMessage;
 import io.github.lutzseverino.cardo.invite.client.InvitationStatus;
 import io.github.lutzseverino.cardo.invite.client.InvitationToken;
 import io.github.lutzseverino.cardo.invite.client.InvitationsClient;
@@ -147,7 +148,13 @@ class HttpInvitationsClientTest {
     URI acceptUrl = URI.create("https://clinic.example.com/invitations/token-1");
     CreateInvitation input =
         new CreateInvitation(
-            requestId, tenantId, "clinic:clinic", "employee@example.com", inviterId, acceptUrlBase);
+            requestId,
+            tenantId,
+            "clinic:clinic",
+            "employee@example.com",
+            inviterId,
+            acceptUrlBase,
+            new InvitationMessage("Join the clinic", "Click {{acceptUrl}}"));
     when(invitations.createInvitation(any(CreateInvitationRequest.class)))
         .thenReturn(
             new CreateInvitationResponse()
@@ -163,6 +170,42 @@ class HttpInvitationsClientTest {
     verify(invitations).createInvitation(request.capture());
     assertThat(request.getValue().getRequestId()).isEqualTo(requestId);
     assertThat(request.getValue().getAcceptUrlBase()).isEqualTo(acceptUrlBase);
+    assertThat(request.getValue().getMessage()).isNotNull();
+    assertThat(request.getValue().getMessage().getSubject()).isEqualTo("Join the clinic");
+    assertThat(request.getValue().getMessage().getBody()).isEqualTo("Click {{acceptUrl}}");
+  }
+
+  @Test
+  void mapsCreationWithoutAMessage() {
+    InvitationsApi invitations = mock(InvitationsApi.class);
+    HttpInvitationsClient client =
+        new HttpInvitationsClient(invitations, mock(InvitationTokensApi.class));
+    UUID requestId = UUID.randomUUID();
+    UUID tenantId = UUID.randomUUID();
+    UUID inviterId = UUID.randomUUID();
+    URI acceptUrlBase = URI.create("https://clinic.example.com/invitations");
+    URI acceptUrl = URI.create("https://clinic.example.com/invitations/token-1");
+    CreateInvitation input =
+        new CreateInvitation(
+            requestId,
+            tenantId,
+            "clinic:clinic",
+            "employee@example.com",
+            inviterId,
+            acceptUrlBase,
+            null);
+    when(invitations.createInvitation(any(CreateInvitationRequest.class)))
+        .thenReturn(
+            new CreateInvitationResponse()
+                .invitation(response(requestId, tenantId, inviterId))
+                .acceptUrl(acceptUrl));
+
+    client.create(input);
+
+    ArgumentCaptor<CreateInvitationRequest> request =
+        ArgumentCaptor.forClass(CreateInvitationRequest.class);
+    verify(invitations).createInvitation(request.capture());
+    assertThat(request.getValue().getMessage()).isNull();
   }
 
   @Test

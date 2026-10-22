@@ -24,6 +24,10 @@ public interface InvitationProjection {
 
   String getAcceptUrlBase();
 
+  String getMessageSubject();
+
+  String getMessageBody();
+
   OffsetDateTime getExpiresAt();
 
   String getToken();

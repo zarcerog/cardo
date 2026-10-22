@@ -111,7 +111,8 @@ public class InvitationService {
                 input.invitedBy(),
                 input.acceptUrlBase(),
                 expiresAt,
-                token));
+                token,
+                input.message()));
     String acceptUrl = invitationUrl(input.acceptUrlBase(), token);
     delivery.stage(invitation.getId());
     return new CreateInvitationResult(
