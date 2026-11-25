@@ -19,7 +19,9 @@ import io.github.lutzseverino.cardo.billing.model.TrialTerms;
 import io.github.lutzseverino.cardo.billing.repository.EntitlementProjection;
 import io.github.lutzseverino.cardo.billing.repository.EntitlementRepository;
 import io.github.lutzseverino.cardo.common.api.ApiException;
+import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -76,6 +78,49 @@ class EntitlementServiceTest {
     assertThat(entitlement.getStatus()).isEqualTo(EntitlementStatus.ACTIVE);
     assertThat(entitlement.getTenantLimit()).isEqualTo(1);
     assertThat(entitlement.getSeatLimit()).isEqualTo(5);
+  }
+
+  @Test
+  void aTrialGrantsAccessUntilItEndsAndNotAfter() {
+    OffsetDateTime trialEndsAt = OffsetDateTime.parse("2026-12-25T09:00:00Z");
+    UUID subjectId = UUID.randomUUID();
+    when(entitlements.findProjectedBySubjectIdAndProduct(subjectId, "clinic"))
+        .thenReturn(
+            Optional.of(
+                new TestEntitlementProjection(subjectId, EntitlementStatus.TRIALING, trialEndsAt)));
+
+    assertThat(serviceAt(trialEndsAt.minusSeconds(1)).require(subjectId, "clinic").status())
+        .isEqualTo(EntitlementStatus.TRIALING);
+    assertThatThrownBy(() -> serviceAt(trialEndsAt.plusSeconds(1)).require(subjectId, "clinic"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(403);
+              assertThat(exception.code()).isEqualTo("entitlement_inactive");
+            });
+  }
+
+  @Test
+  void aTrialThatHasJustEndedCountsAsUsed() {
+    OffsetDateTime trialEndsAt = OffsetDateTime.parse("2026-12-25T09:00:00Z");
+    Entitlement trial = trialEndingAt(trialEndsAt);
+    when(entitlements.findEntityBySubjectIdAndProduct(trial.getSubjectId(), "clinic"))
+        .thenReturn(Optional.of(trial));
+    when(entitlements.findProjectedBySubjectIdAndProduct(trial.getSubjectId(), "clinic"))
+        .thenReturn(Optional.of(entitlement(trial.getSubjectId(), EntitlementStatus.TRIALING)));
+
+    assertThat(
+            serviceAt(trialEndsAt.minusSeconds(1))
+                .startTrial(trial.getSubjectId(), "clinic", new TrialTerms(14, 1, 5))
+                .started())
+        .isFalse();
+    assertThatThrownBy(
+            () ->
+                serviceAt(trialEndsAt.plusSeconds(1))
+                    .startTrial(trial.getSubjectId(), "clinic", new TrialTerms(14, 1, 5)))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> assertThat(exception.code()).isEqualTo("trial_already_used"));
   }
 
   @Test
@@ -198,6 +243,13 @@ class EntitlementServiceTest {
     return new EntitlementService(entitlements, new EntitlementApplicationMapperImpl());
   }
 
+  private EntitlementService serviceAt(OffsetDateTime now) {
+    return new EntitlementService(
+        entitlements,
+        new EntitlementApplicationMapperImpl(),
+        Clock.fixed(now.toInstant(), ZoneOffset.UTC));
+  }
+
   private Entitlement trialEndingAt(OffsetDateTime trialEndsAt) {
     Entitlement entitlement = stored(EntitlementStatus.TRIALING);
     entitlement.setTrialEndsAt(trialEndsAt);
@@ -216,8 +268,13 @@ class EntitlementServiceTest {
     return new TestEntitlementProjection(subjectId, status);
   }
 
-  private record TestEntitlementProjection(UUID subjectId, EntitlementStatus status)
+  private record TestEntitlementProjection(
+      UUID subjectId, EntitlementStatus status, OffsetDateTime trialEndsAt)
       implements EntitlementProjection {
+
+    TestEntitlementProjection(UUID subjectId, EntitlementStatus status) {
+      this(subjectId, status, null);
+    }
 
     @Override
     public UUID getId() {
@@ -251,7 +308,7 @@ class EntitlementServiceTest {
 
     @Override
     public OffsetDateTime getTrialEndsAt() {
-      return null;
+      return trialEndsAt;
     }
 
     @Override

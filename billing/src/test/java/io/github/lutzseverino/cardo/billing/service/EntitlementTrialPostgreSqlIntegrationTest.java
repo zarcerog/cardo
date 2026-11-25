@@ -13,7 +13,11 @@ import io.github.lutzseverino.cardo.billing.model.TrialStart;
 import io.github.lutzseverino.cardo.billing.model.TrialTerms;
 import io.github.lutzseverino.cardo.billing.repository.EntitlementRepository;
 import io.github.lutzseverino.cardo.common.api.ApiException;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
@@ -30,6 +34,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.AccessDeniedException;
@@ -72,6 +77,7 @@ class EntitlementTrialPostgreSqlIntegrationTest {
   @Autowired private EntitlementService service;
   @Autowired private EntitlementRepository entitlements;
   @Autowired private JdbcTemplate jdbc;
+  @Autowired private SettableClock clock;
 
   @DynamicPropertySource
   static void configurePostgres(DynamicPropertyRegistry properties) {
@@ -87,8 +93,38 @@ class EntitlementTrialPostgreSqlIntegrationTest {
   }
 
   @AfterEach
-  void clearAuthentication() {
+  void clearAuthenticationAndClock() {
     SecurityContextHolder.clearContext();
+    clock.set(null);
+  }
+
+  @Test
+  void aTrialGrantsAccessUntilItEndsAndThenCountsAsUsed() {
+    UUID subjectId = UUID.randomUUID();
+    Instant startedAt = Instant.parse("2026-11-25T09:00:00Z");
+    Instant endsAt = startedAt.plus(30, ChronoUnit.DAYS);
+    authenticateWith(
+        BillingPermissions.ENTITLEMENT_TRIAL_AUTHORITY,
+        BillingPermissions.ENTITLEMENT_READ_AUTHORITY);
+    clock.set(startedAt);
+    service.startTrial(subjectId, "clinic", new TrialTerms(30, 1, 5));
+
+    clock.set(endsAt.minusSeconds(1));
+    assertThat(service.require(subjectId, "clinic").trialEndsAt().toInstant()).isEqualTo(endsAt);
+    assertThat(service.startTrial(subjectId, "clinic", TERMS).started()).isFalse();
+
+    clock.set(endsAt.plusSeconds(1));
+    assertThatThrownBy(() -> service.require(subjectId, "clinic"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(403);
+              assertThat(exception.code()).isEqualTo("entitlement_inactive");
+            });
+    assertThatThrownBy(() -> service.startTrial(subjectId, "clinic", TERMS))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> assertThat(exception.code()).isEqualTo("trial_already_used"));
   }
 
   @Test
@@ -190,12 +226,44 @@ class EntitlementTrialPostgreSqlIntegrationTest {
     }
   }
 
-  private static void authenticateWith(String authority) {
+  private static void authenticateWith(String... authorities) {
     SecurityContextHolder.getContext()
-        .setAuthentication(new TestingAuthenticationToken("product-outbound", null, authority));
+        .setAuthentication(new TestingAuthenticationToken("product-outbound", null, authorities));
   }
 
   @TestConfiguration
   @EnableMethodSecurity
-  static class MethodSecurity {}
+  static class MethodSecurity {
+
+    @Bean
+    SettableClock clock() {
+      return new SettableClock();
+    }
+  }
+
+  /** The system clock until a test sets an instant. */
+  static final class SettableClock extends Clock {
+
+    private volatile Instant instant;
+
+    void set(Instant instant) {
+      this.instant = instant;
+    }
+
+    @Override
+    public Instant instant() {
+      Instant fixed = instant;
+      return fixed == null ? Instant.now() : fixed;
+    }
+
+    @Override
+    public ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(ZoneId zone) {
+      throw new UnsupportedOperationException();
+    }
+  }
 }

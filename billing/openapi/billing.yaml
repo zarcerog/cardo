@@ -140,7 +140,7 @@ paths:
         - $ref: "#/components/parameters/Product"
       responses:
         "200":
-          description: Active or trialing entitlement.
+          description: Active entitlement, or trialing entitlement whose trial has not ended.
           content:
             application/json:
               schema:

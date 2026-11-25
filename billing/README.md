@@ -29,7 +29,9 @@ subject and product:
 | `trialing` (not yet ended) or `active` | `200` with it, unchanged |
 | ended: an expired trial, `canceled`, or `past_due` | `409 trial_already_used` |
 
-Each subject gets one trial per product; `EntitlementService.mayStartAnotherTrial`
+A trial ends at its `trialEndsAt`: from then on `/access` (`require`) refuses it
+with `403 entitlement_inactive` and it counts as used. `EntitlementStatus.grantsAccess`
+holds that access rule. Each subject gets one trial per product; `EntitlementService.mayStartAnotherTrial`
 holds that rule. The caller needs the `billing:entitlement:trial` authority:
 the `entitlement:trial` role of the `billing` Keycloak client, granted only to
 the product's outbound service client.

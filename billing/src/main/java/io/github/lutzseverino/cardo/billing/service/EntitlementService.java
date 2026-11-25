@@ -21,7 +21,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,12 +30,31 @@ import org.springframework.validation.annotation.Validated;
 
 @Validated
 @Service
-@RequiredArgsConstructor
 public class EntitlementService {
 
-  private final Clock clock = Clock.systemUTC();
   private final EntitlementRepository entitlements;
   private final EntitlementApplicationMapper mapper;
+  private final Clock clock;
+
+  @Autowired
+  public EntitlementService(
+      EntitlementRepository entitlements,
+      EntitlementApplicationMapper mapper,
+      ObjectProvider<Clock> clock) {
+    this(entitlements, mapper, clock.getIfAvailable(Clock::systemUTC));
+  }
+
+  public EntitlementService(
+      EntitlementRepository entitlements, EntitlementApplicationMapper mapper) {
+    this(entitlements, mapper, Clock.systemUTC());
+  }
+
+  EntitlementService(
+      EntitlementRepository entitlements, EntitlementApplicationMapper mapper, Clock clock) {
+    this.entitlements = entitlements;
+    this.mapper = mapper;
+    this.clock = clock;
+  }
 
   public EntitlementResult getCurrent(UUID subjectId, @NotBlank String product) {
     return getResult(subjectId, product);
@@ -48,7 +68,9 @@ public class EntitlementService {
   @PreAuthorize("hasAuthority('" + BillingPermissions.ENTITLEMENT_READ_AUTHORITY + "')")
   public EntitlementResult require(UUID subjectId, @NotBlank String product) {
     EntitlementProjection entitlement = getProjection(subjectId, product);
-    if (!entitlement.getStatus().usable()) {
+    if (!entitlement
+        .getStatus()
+        .grantsAccess(entitlement.getTrialEndsAt(), OffsetDateTime.now(clock))) {
       throw ApiException.forbidden("entitlement_inactive", "Entitlement is not active.");
     }
     return mapper.toResult(entitlement);
