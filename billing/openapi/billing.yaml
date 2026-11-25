@@ -140,7 +140,7 @@ paths:
         - $ref: "#/components/parameters/Product"
       responses:
         "200":
-          description: Active or trialing entitlement.
+          description: Active entitlement, or trialing entitlement whose trial has not ended.
           content:
             application/json:
               schema:
@@ -151,6 +151,47 @@ paths:
           $ref: "#/components/responses/NotFound"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /billing/subjects/{subjectId}/entitlements/{product}/trial:
+    put:
+      tags: [Entitlements]
+      operationId: startSubjectTrial
+      summary: Start a subject's trial of a product, once.
+      description: >-
+        Idempotent per subject and product. Creates a trialing entitlement when the subject has
+        none; returns a trialing or active entitlement unchanged; refuses with
+        `trial_already_used` when the subject's entitlement for the product has ended.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SubjectId"
+        - $ref: "#/components/parameters/Product"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartTrialRequest"
+      responses:
+        "200":
+          description: The subject already has a trialing or active entitlement; it is unchanged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementResponse"
+        "201":
+          description: Trial started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
   /billing/webhooks/stripe:
     post:
       tags: [Stripe Webhooks]
@@ -206,6 +247,8 @@ components:
       $ref: "../../common/openapi/errors.yaml#/components/responses/Forbidden"
     NotFound:
       $ref: "../../common/openapi/errors.yaml#/components/responses/NotFound"
+    Conflict:
+      $ref: "../../common/openapi/errors.yaml#/components/responses/Conflict"
     BadGateway:
       $ref: "../../common/openapi/errors.yaml#/components/responses/BadGateway"
   schemas:
@@ -263,6 +306,28 @@ components:
         url:
           type: string
           format: uri
+    StartTrialRequest:
+      type: object
+      required: [trialDays, tenantLimit, seatLimit]
+      properties:
+        trialDays:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 365
+          example: 30
+        tenantLimit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 1000
+          example: 1
+        seatLimit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+          example: 5
     EntitlementResponse:
       type: object
       required: [id, subjectId, product, status, createdAt, updatedAt]

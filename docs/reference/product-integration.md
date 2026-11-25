@@ -180,6 +180,19 @@ Follow the [ordered scoped service-token rollout](../how-to/roll-out-scoped-serv
 adding these properties without the matching optional Keycloak scopes and
 audience mappers fails closed at the first remote call.
 
+Billing's service-facing entitlement operations each require a `billing` client role on the calling
+product's outbound service client:
+
+| Operation | Client method | Authority | Keycloak role on `billing` |
+| --- | --- | --- | --- |
+| Read or require a subject's entitlement | `require` | `billing:entitlement:read` | `entitlement:read` |
+| Start a subject's trial of a product, once | `startTrial` | `billing:entitlement:trial` | `entitlement:trial` |
+
+Grant `entitlement:trial` only to the product's outbound service client and include it in the
+optional `billing` client scope that client requests. `startTrial` is safe to retry: it returns the
+subject's trialing or active entitlement unchanged, and refuses a subject whose entitlement has
+ended with `409 trial_already_used`. See the [Billing overview](../../billing/README.md#trials).
+
 Billing and Invite perform issuer discovery lazily when the first bearer token
 is decoded, preserving Spring Boot's startup behavior. Public health can
 therefore remain available during an issuer outage, while protected bearer

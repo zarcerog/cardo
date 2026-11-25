@@ -15,6 +15,32 @@ There is no product integration module yet. Add one only if real products repeat
 the same entitlement guard, checkout, or portal wiring beyond the existing
 client modules.
 
+### Trials
+
+A product starts a subject's free trial, without a card, with
+`PUT /billing/subjects/{subjectId}/entitlements/{product}/trial` (Java:
+`BillingEntitlementsClient.startTrial`). The body carries `trialDays` (1-365),
+`tenantLimit` (1-1000), and `seatLimit` (1-10000). The call is idempotent per
+subject and product:
+
+| Subject's entitlement for the product | Result |
+| --- | --- |
+| none | `201` with a new `trialing` entitlement ending `trialDays` from now |
+| `trialing` (not yet ended) or `active` | `200` with it, unchanged |
+| ended: an expired trial, `canceled`, or `past_due` | `409 trial_already_used` |
+
+A trial ends at its `trialEndsAt`: from then on `/access` (`require`) refuses it
+with `403 entitlement_inactive` and it counts as used. `EntitlementStatus.grantsAccess`
+holds that access rule. Each subject gets one trial per product; `EntitlementService.mayStartAnotherTrial`
+holds that rule. The caller needs the `billing:entitlement:trial` authority:
+the `entitlement:trial` role of the `billing` Keycloak client, granted only to
+the product's outbound service client.
+
+When Stripe later reports a paid entitlement for the product, the sync replaces
+the trial with it (`active`, no `trialEndsAt`). A sync that does not list the
+product leaves an unexpired trial alone, because Billing started it, not Stripe,
+and cancels an expired one.
+
 Products still own product catalog meaning, tenant limits in domain workflows,
 and the decision about which product operation requires an entitlement. Billing
 must not silently grant product-domain access.

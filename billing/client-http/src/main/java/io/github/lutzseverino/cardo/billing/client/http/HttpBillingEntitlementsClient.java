@@ -4,6 +4,7 @@ import io.github.lutzseverino.cardo.billing.client.BillingEntitlement;
 import io.github.lutzseverino.cardo.billing.client.BillingEntitlementStatus;
 import io.github.lutzseverino.cardo.billing.client.BillingEntitlementsClient;
 import io.github.lutzseverino.cardo.billing.client.http.generated.EntitlementResponse;
+import io.github.lutzseverino.cardo.billing.client.http.generated.StartTrialRequest;
 import io.github.lutzseverino.cardo.billing.client.http.generated.api.EntitlementsApi;
 import java.util.UUID;
 
@@ -18,6 +19,19 @@ final class HttpBillingEntitlementsClient implements BillingEntitlementsClient {
   @Override
   public BillingEntitlement require(UUID subjectId, String product) {
     return toEntitlement(entitlements.requireSubjectEntitlement(subjectId, product));
+  }
+
+  @Override
+  public BillingEntitlement startTrial(
+      UUID subjectId, String product, int trialDays, int tenantLimit, int seatLimit) {
+    return toEntitlement(
+        entitlements.startSubjectTrial(
+            subjectId,
+            product,
+            new StartTrialRequest()
+                .trialDays(trialDays)
+                .tenantLimit(tenantLimit)
+                .seatLimit(seatLimit)));
   }
 
   private BillingEntitlement toEntitlement(EntitlementResponse response) {

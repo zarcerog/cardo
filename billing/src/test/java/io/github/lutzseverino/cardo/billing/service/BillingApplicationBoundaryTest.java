@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.lutzseverino.cardo.billing.BillingApplication;
 import io.github.lutzseverino.cardo.billing.BillingPermissions;
+import io.github.lutzseverino.cardo.billing.model.TrialTerms;
 import io.github.lutzseverino.cardo.billing.workflow.CreateCheckoutSessionWorkflow;
 import io.github.lutzseverino.cardo.billing.workflow.CreatePortalSessionWorkflow;
 import io.github.lutzseverino.cardo.billing.workflow.ProcessStripeWebhookWorkflow;
@@ -140,6 +141,16 @@ class BillingApplicationBoundaryTest {
                 .getAnnotation(PreAuthorize.class)
                 .value())
         .contains(BillingPermissions.ENTITLEMENT_READ_AUTHORITY);
+    assertThat(
+            method(
+                    EntitlementService.class,
+                    "startTrial",
+                    UUID.class,
+                    String.class,
+                    TrialTerms.class)
+                .getAnnotation(PreAuthorize.class)
+                .value())
+        .contains(BillingPermissions.ENTITLEMENT_TRIAL_AUTHORITY);
   }
 
   @Test
@@ -150,6 +161,15 @@ class BillingApplicationBoundaryTest {
         .isTrue();
     assertThat(
             method(EntitlementService.class, "replaceActive", UUID.class, Collection.class)
+                .isAnnotationPresent(Transactional.class))
+        .isTrue();
+    assertThat(
+            method(
+                    EntitlementService.class,
+                    "startTrial",
+                    UUID.class,
+                    String.class,
+                    TrialTerms.class)
                 .isAnnotationPresent(Transactional.class))
         .isTrue();
   }

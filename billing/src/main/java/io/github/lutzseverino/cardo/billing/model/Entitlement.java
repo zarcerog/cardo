@@ -63,4 +63,17 @@ public class Entitlement extends AuditedEntity implements PersonalDataEntity {
     entitlement.product = product;
     return entitlement;
   }
+
+  /** Whether the entitlement still grants access at {@code now}. */
+  public boolean isCurrent(OffsetDateTime now) {
+    return status.grantsAccess(trialEndsAt, now);
+  }
+
+  public void startTrial(TrialTerms terms, OffsetDateTime now) {
+    status = EntitlementStatus.TRIALING;
+    tenantLimit = terms.tenantLimit();
+    seatLimit = terms.seatLimit();
+    trialEndsAt = now.plusDays(terms.trialDays());
+    currentPeriodEndsAt = null;
+  }
 }
