@@ -11,6 +11,7 @@ import io.github.lutzseverino.cardo.billing.client.BillingEntitlement;
 import io.github.lutzseverino.cardo.billing.client.BillingEntitlementStatus;
 import io.github.lutzseverino.cardo.billing.client.BillingEntitlementsClient;
 import io.github.lutzseverino.cardo.billing.client.http.generated.EntitlementResponse;
+import io.github.lutzseverino.cardo.billing.client.http.generated.StartTrialRequest;
 import io.github.lutzseverino.cardo.billing.client.http.generated.api.EntitlementsApi;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -158,5 +159,34 @@ class HttpBillingEntitlementsClientTest {
     assertThat(entitlement.seatLimit()).isEqualTo(12);
     assertThat(entitlement.createdAt()).isEqualTo(createdAt);
     assertThat(entitlement.updatedAt()).isEqualTo(createdAt.plusHours(1));
+  }
+
+  @Test
+  void startsATrialAcrossTheGeneratedClientBoundary() {
+    EntitlementsApi entitlements = mock(EntitlementsApi.class);
+    HttpBillingEntitlementsClient client = new HttpBillingEntitlementsClient(entitlements);
+    UUID subjectId = UUID.randomUUID();
+    OffsetDateTime createdAt = OffsetDateTime.parse("2026-11-25T09:00:00Z");
+    StartTrialRequest request = new StartTrialRequest().trialDays(14).tenantLimit(1).seatLimit(5);
+    when(entitlements.startSubjectTrial(subjectId, "clinic", request))
+        .thenReturn(
+            new EntitlementResponse()
+                .id(UUID.randomUUID())
+                .subjectId(subjectId)
+                .product("clinic")
+                .status(EntitlementResponse.StatusEnum.TRIALING)
+                .tenantLimit(1)
+                .seatLimit(5)
+                .trialEndsAt(createdAt.plusDays(14))
+                .createdAt(createdAt)
+                .updatedAt(createdAt));
+
+    BillingEntitlement entitlement = client.startTrial(subjectId, "clinic", 14, 1, 5);
+
+    verify(entitlements).startSubjectTrial(subjectId, "clinic", request);
+    assertThat(entitlement.status()).isEqualTo(BillingEntitlementStatus.TRIALING);
+    assertThat(entitlement.tenantLimit()).isEqualTo(1);
+    assertThat(entitlement.seatLimit()).isEqualTo(5);
+    assertThat(entitlement.trialEndsAt()).isEqualTo(createdAt.plusDays(14));
   }
 }
