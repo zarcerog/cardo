@@ -26,8 +26,8 @@ subject and product:
 | Subject's entitlement for the product | Result |
 | --- | --- |
 | none | `201` with a new `trialing` entitlement ending `trialDays` from now |
-| `trialing` (not yet ended) or `active` | `200` with it, unchanged |
-| ended: an expired trial, `canceled`, or `past_due` | `409 trial_already_used` |
+| `trialing` (not yet ended), `active` or `past_due` | `200` with it, unchanged |
+| ended: an expired trial or `canceled` | `409 trial_already_used` |
 
 A trial ends at its `trialEndsAt`: from then on `/access` (`require`) refuses it
 with `403 entitlement_inactive` and it counts as used. `EntitlementStatus.grantsAccess`
@@ -40,6 +40,28 @@ When Stripe later reports a paid entitlement for the product, the sync replaces
 the trial with it (`active`, no `trialEndsAt`). A sync that does not list the
 product leaves an unexpired trial alone, because Billing started it, not Stripe,
 and cancels an expired one.
+
+### Subscriptions a product bills itself
+
+A product that takes payment through its own payment provider reports the
+subscription with `PUT /billing/subjects/{subjectId}/entitlements/{product}/subscription`
+(Java: `BillingEntitlementsClient.setSubscription`). The body carries `status`
+(`active`, `past_due` or `canceled`), `tenantLimit` (1-1000), `seatLimit`
+(1-10000) and an optional `currentPeriodEndsAt`. It replaces the subject's
+entitlement for the product, a trial included: no `trialEndsAt`, the reported
+status, limits and period end. It answers `201` when it created the entitlement
+and `200` otherwise; reporting the same subscription again leaves it unchanged.
+
+A `past_due` subscription keeps granting access while the provider retries the
+payment; the product decides how long a grace it allows and reports `canceled`
+when it ends. The caller needs the `billing:entitlement:subscription`
+authority: the `entitlement:subscription` role of the `billing` Keycloak client,
+granted only to the product's outbound service client.
+
+Billing's Stripe sync does not know these subscriptions. A sync for a subject
+that does not list the product cancels the entitlement, as it does any paid
+entitlement Stripe no longer reports, so a product should not use both Cardo's
+Stripe checkout and this operation for the same product.
 
 Products still own product catalog meaning, tenant limits in domain workflows,
 and the decision about which product operation requires an entitlement. Billing

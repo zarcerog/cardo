@@ -187,11 +187,17 @@ product's outbound service client:
 | --- | --- | --- | --- |
 | Read or require a subject's entitlement | `require` | `billing:entitlement:read` | `entitlement:read` |
 | Start a subject's trial of a product, once | `startTrial` | `billing:entitlement:trial` | `entitlement:trial` |
+| Set a subject's entitlement to the subscription the product billed | `setSubscription` | `billing:entitlement:subscription` | `entitlement:subscription` |
 
 Grant `entitlement:trial` only to the product's outbound service client and include it in the
 optional `billing` client scope that client requests. `startTrial` is safe to retry: it returns the
-subject's trialing or active entitlement unchanged, and refuses a subject whose entitlement has
-ended with `409 trial_already_used`. See the [Billing overview](../../billing/README.md#trials).
+subject's trialing, active or past-due entitlement unchanged, and refuses a subject whose
+entitlement has ended with `409 trial_already_used`. See the [Billing overview](../../billing/README.md#trials).
+
+Grant `entitlement:subscription` the same way, only to the outbound service client of a product that
+bills through its own payment provider. `setSubscription` replaces the subject's entitlement, a trial
+included, and is safe to retry. See
+[Subscriptions a product bills itself](../../billing/README.md#subscriptions-a-product-bills-itself).
 
 Billing and Invite perform issuer discovery lazily when the first bearer token
 is decoded, preserving Spring Boot's startup behavior. Public health can
