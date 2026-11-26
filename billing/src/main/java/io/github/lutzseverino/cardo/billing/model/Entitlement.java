@@ -76,4 +76,13 @@ public class Entitlement extends AuditedEntity implements PersonalDataEntity {
     trialEndsAt = now.plusDays(terms.trialDays());
     currentPeriodEndsAt = null;
   }
+
+  /** Replaces whatever the entitlement was, a trial included, with the paid subscription. */
+  public void applySubscription(SubscriptionTerms terms) {
+    status = terms.status();
+    tenantLimit = terms.tenantLimit();
+    seatLimit = terms.seatLimit();
+    trialEndsAt = null;
+    currentPeriodEndsAt = terms.currentPeriodEndsAt();
+  }
 }

@@ -6,6 +6,8 @@ import io.github.lutzseverino.cardo.billing.model.Entitlement;
 import io.github.lutzseverino.cardo.billing.model.EntitlementResult;
 import io.github.lutzseverino.cardo.billing.model.EntitlementStatus;
 import io.github.lutzseverino.cardo.billing.model.EntitlementSyncItem;
+import io.github.lutzseverino.cardo.billing.model.SubscriptionChange;
+import io.github.lutzseverino.cardo.billing.model.SubscriptionTerms;
 import io.github.lutzseverino.cardo.billing.model.TrialStart;
 import io.github.lutzseverino.cardo.billing.model.TrialTerms;
 import io.github.lutzseverino.cardo.billing.repository.EntitlementProjection;
@@ -122,6 +124,42 @@ public class EntitlementService {
    */
   static boolean mayStartAnotherTrial(Entitlement ended) {
     return false;
+  }
+
+  /**
+   * Sets the subject's entitlement for {@code product} to the paid subscription the product's own
+   * payment provider confirmed, replacing whatever it was, a trial included. Reporting the same
+   * subscription again leaves the entitlement unchanged.
+   */
+  @Transactional
+  @PreAuthorize("hasAuthority('" + BillingPermissions.ENTITLEMENT_SUBSCRIPTION_AUTHORITY + "')")
+  public SubscriptionChange setSubscription(
+      @NotNull UUID subjectId, @NotBlank String product, @NotNull @Valid SubscriptionTerms terms) {
+    if (!terms.status().describesASubscription()) {
+      throw ApiException.badRequest("entitlement_status_invalid", "Entitlement status is invalid.");
+    }
+    Optional<Entitlement> existing =
+        entitlements.findEntityBySubjectIdAndProduct(subjectId, product);
+    if (existing.isEmpty()) {
+      int inserted =
+          entitlements.insertSubscriptionIfAbsent(
+              UUID.randomUUID(),
+              subjectId,
+              product,
+              terms.status().name(),
+              terms.tenantLimit(),
+              terms.seatLimit(),
+              terms.currentPeriodEndsAt());
+      if (inserted == 1) {
+        return new SubscriptionChange(getResult(subjectId, product), true);
+      }
+      // A concurrent request inserted it first; replace the row it wrote.
+    }
+
+    Entitlement entitlement = existing.orElseGet(() -> getEntity(subjectId, product));
+    entitlement.applySubscription(terms);
+    entitlements.saveAndFlush(entitlement);
+    return new SubscriptionChange(getResult(subjectId, product), false);
   }
 
   @Transactional

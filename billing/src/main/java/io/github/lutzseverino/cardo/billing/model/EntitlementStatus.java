@@ -20,16 +20,23 @@ public enum EntitlementStatus {
   }
 
   /**
-   * The single access rule: an entitlement grants access when it is active, or trialing with a
-   * trial that has not ended at {@code now}. A trial ends at {@code trialEndsAt}; from then on it
-   * counts as ended, like a cancelled subscription.
+   * The single access rule: an entitlement grants access when it is active, past due, or trialing
+   * with a trial that has not ended at {@code now}. A trial ends at {@code trialEndsAt}; from then
+   * on it counts as ended, like a cancelled subscription. A past-due subscription keeps granting
+   * access while the payment provider retries; the product decides how long a grace it allows, and
+   * reports {@code canceled} when it ends.
    */
   public boolean grantsAccess(OffsetDateTime trialEndsAt, OffsetDateTime now) {
     return switch (this) {
-      case ACTIVE -> true;
+      case ACTIVE, PAST_DUE -> true;
       case TRIALING -> trialEndsAt == null || trialEndsAt.isAfter(now);
-      case PAST_DUE, CANCELED -> false;
+      case CANCELED -> false;
     };
+  }
+
+  /** Whether a product may report this status for a paid subscription. */
+  public boolean describesASubscription() {
+    return this != TRIALING;
   }
 
   public static EntitlementStatus fromWireValue(String value) {

@@ -1,8 +1,10 @@
 package io.github.lutzseverino.cardo.billing.mapper;
 
 import io.github.lutzseverino.cardo.billing.api.model.EntitlementResponse;
+import io.github.lutzseverino.cardo.billing.api.model.SetSubscriptionRequest;
 import io.github.lutzseverino.cardo.billing.api.model.StartTrialRequest;
 import io.github.lutzseverino.cardo.billing.model.EntitlementResult;
+import io.github.lutzseverino.cardo.billing.model.SubscriptionTerms;
 import io.github.lutzseverino.cardo.billing.model.TrialTerms;
 import io.github.lutzseverino.cardo.openapi.mapping.UriResponseConversions;
 import org.mapstruct.Mapper;
@@ -15,4 +17,6 @@ public interface EntitlementTransportMapper {
   EntitlementResponse toResponse(EntitlementResult result);
 
   TrialTerms toTerms(StartTrialRequest request);
+
+  SubscriptionTerms toTerms(SetSubscriptionRequest request);
 }

@@ -63,6 +63,13 @@ class BillingSecurityTrafficTest {
                     "resource_access",
                     Map.of("billing", Map.of("roles", List.of("entitlement:read"))))
                 .build());
+    when(decoder.decode("subscription-token"))
+        .thenReturn(
+            jwt("subscription-token")
+                .claim(
+                    "resource_access",
+                    Map.of("billing", Map.of("roles", List.of("entitlement:subscription"))))
+                .build());
   }
 
   @Test
@@ -88,6 +95,18 @@ class BillingSecurityTrafficTest {
     mvc.perform(get("/api/v1/traffic/service").header("Authorization", "Bearer user-token"))
         .andExpect(status().isForbidden())
         .andExpect(content().string(""));
+  }
+
+  @Test
+  void onlyAServiceTokenWithTheSubscriptionRoleMayReportASubscription() throws Exception {
+    mvc.perform(
+            get("/api/v1/traffic/subscription")
+                .header("Authorization", "Bearer subscription-token"))
+        .andExpect(status().isOk());
+    mvc.perform(get("/api/v1/traffic/subscription").header("Authorization", "Bearer user-token"))
+        .andExpect(status().isForbidden());
+    mvc.perform(get("/api/v1/traffic/subscription").header("Authorization", "Bearer service-token"))
+        .andExpect(status().isForbidden());
   }
 
   private Jwt.Builder jwt(String value) {
@@ -121,6 +140,12 @@ class BillingSecurityTrafficTest {
     @PreAuthorize("hasAuthority('" + BillingPermissions.ENTITLEMENT_READ_AUTHORITY + "')")
     @GetMapping("/api/v1/traffic/service")
     String service() {
+      return "ok";
+    }
+
+    @PreAuthorize("hasAuthority('" + BillingPermissions.ENTITLEMENT_SUBSCRIPTION_AUTHORITY + "')")
+    @GetMapping("/api/v1/traffic/subscription")
+    String subscription() {
       return "ok";
     }
   }

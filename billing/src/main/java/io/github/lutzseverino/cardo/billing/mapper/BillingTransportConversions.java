@@ -13,4 +13,10 @@ public class BillingTransportConversions {
         : io.github.lutzseverino.cardo.billing.api.model.EntitlementResponse.StatusEnum.fromValue(
             status.wireValue());
   }
+
+  /** A reported subscription status, by its wire value: {@code past_due} is {@code PAST_DUE}. */
+  public EntitlementStatus toDomain(
+      io.github.lutzseverino.cardo.billing.api.model.SetSubscriptionRequest.StatusEnum status) {
+    return status == null ? null : EntitlementStatus.fromWireValue(status.getValue());
+  }
 }
