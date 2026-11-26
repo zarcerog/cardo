@@ -4,8 +4,10 @@ import io.github.lutzseverino.cardo.billing.client.BillingEntitlement;
 import io.github.lutzseverino.cardo.billing.client.BillingEntitlementStatus;
 import io.github.lutzseverino.cardo.billing.client.BillingEntitlementsClient;
 import io.github.lutzseverino.cardo.billing.client.http.generated.EntitlementResponse;
+import io.github.lutzseverino.cardo.billing.client.http.generated.SetSubscriptionRequest;
 import io.github.lutzseverino.cardo.billing.client.http.generated.StartTrialRequest;
 import io.github.lutzseverino.cardo.billing.client.http.generated.api.EntitlementsApi;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 final class HttpBillingEntitlementsClient implements BillingEntitlementsClient {
@@ -32,6 +34,35 @@ final class HttpBillingEntitlementsClient implements BillingEntitlementsClient {
                 .trialDays(trialDays)
                 .tenantLimit(tenantLimit)
                 .seatLimit(seatLimit)));
+  }
+
+  @Override
+  public BillingEntitlement setSubscription(
+      UUID subjectId,
+      String product,
+      BillingEntitlementStatus status,
+      int tenantLimit,
+      int seatLimit,
+      OffsetDateTime currentPeriodEndsAt) {
+    return toEntitlement(
+        entitlements.setSubjectSubscription(
+            subjectId,
+            product,
+            new SetSubscriptionRequest()
+                .status(toSubscriptionStatus(status))
+                .tenantLimit(tenantLimit)
+                .seatLimit(seatLimit)
+                .currentPeriodEndsAt(currentPeriodEndsAt)));
+  }
+
+  private SetSubscriptionRequest.StatusEnum toSubscriptionStatus(BillingEntitlementStatus status) {
+    return switch (status) {
+      case ACTIVE -> SetSubscriptionRequest.StatusEnum.ACTIVE;
+      case PAST_DUE -> SetSubscriptionRequest.StatusEnum.PAST_DUE;
+      case CANCELED -> SetSubscriptionRequest.StatusEnum.CANCELED;
+      case TRIALING ->
+          throw new IllegalArgumentException("A paid subscription cannot be trialing.");
+    };
   }
 
   private BillingEntitlement toEntitlement(EntitlementResponse response) {

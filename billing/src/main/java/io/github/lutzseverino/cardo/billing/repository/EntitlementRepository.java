@@ -43,4 +43,30 @@ public interface EntitlementRepository extends JpaRepository<Entitlement, UUID> 
       @Param("tenantLimit") int tenantLimit,
       @Param("seatLimit") int seatLimit,
       @Param("trialEndsAt") OffsetDateTime trialEndsAt);
+
+  /**
+   * Inserts a subscription entitlement unless the subject already has one for the product, so
+   * concurrent first reports create exactly one.
+   *
+   * @return 1 when this call inserted it, otherwise 0
+   */
+  @Modifying(flushAutomatically = true)
+  @Query(
+      nativeQuery = true,
+      value =
+          """
+          insert into billing_entitlements
+            (id, subject_id, product, status, tenant_limit, seat_limit, current_period_ends_at)
+          values
+            (:id, :subjectId, :product, :status, :tenantLimit, :seatLimit, :currentPeriodEndsAt)
+          on conflict (subject_id, product) do nothing
+          """)
+  int insertSubscriptionIfAbsent(
+      @Param("id") UUID id,
+      @Param("subjectId") UUID subjectId,
+      @Param("product") String product,
+      @Param("status") String status,
+      @Param("tenantLimit") int tenantLimit,
+      @Param("seatLimit") int seatLimit,
+      @Param("currentPeriodEndsAt") OffsetDateTime currentPeriodEndsAt);
 }

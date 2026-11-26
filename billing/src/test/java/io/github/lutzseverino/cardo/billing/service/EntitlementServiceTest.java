@@ -14,6 +14,8 @@ import io.github.lutzseverino.cardo.billing.mapper.EntitlementApplicationMapperI
 import io.github.lutzseverino.cardo.billing.model.Entitlement;
 import io.github.lutzseverino.cardo.billing.model.EntitlementStatus;
 import io.github.lutzseverino.cardo.billing.model.EntitlementSyncItem;
+import io.github.lutzseverino.cardo.billing.model.SubscriptionChange;
+import io.github.lutzseverino.cardo.billing.model.SubscriptionTerms;
 import io.github.lutzseverino.cardo.billing.model.TrialStart;
 import io.github.lutzseverino.cardo.billing.model.TrialTerms;
 import io.github.lutzseverino.cardo.billing.repository.EntitlementProjection;
@@ -54,7 +56,7 @@ class EntitlementServiceTest {
     EntitlementService service =
         new EntitlementService(entitlements, new EntitlementApplicationMapperImpl());
     when(entitlements.findProjectedBySubjectIdAndProduct(subjectId, "clinic"))
-        .thenReturn(Optional.of(entitlement(subjectId, EntitlementStatus.PAST_DUE)));
+        .thenReturn(Optional.of(entitlement(subjectId, EntitlementStatus.CANCELED)));
 
     assertThatThrownBy(() -> service.require(subjectId, "clinic"))
         .isInstanceOf(ApiException.class)
@@ -148,10 +150,12 @@ class EntitlementServiceTest {
   }
 
   @Test
-  void returnsACurrentTrialOrActiveEntitlementUnchanged() {
+  void returnsACurrentTrialOrActiveOrPastDueEntitlementUnchanged() {
     for (Entitlement current :
         List.of(
-            trialEndingAt(OffsetDateTime.now().plusDays(3)), stored(EntitlementStatus.ACTIVE))) {
+            trialEndingAt(OffsetDateTime.now().plusDays(3)),
+            stored(EntitlementStatus.ACTIVE),
+            stored(EntitlementStatus.PAST_DUE))) {
       UUID subjectId = current.getSubjectId();
       EntitlementService service = service();
       when(entitlements.findEntityBySubjectIdAndProduct(subjectId, "clinic"))
@@ -163,7 +167,8 @@ class EntitlementServiceTest {
       TrialStart trial = service.startTrial(subjectId, "clinic", new TrialTerms(30, 9, 99));
 
       assertThat(trial.started()).isFalse();
-      assertThat(current.getStatus()).isIn(EntitlementStatus.TRIALING, EntitlementStatus.ACTIVE);
+      assertThat(current.getStatus())
+          .isIn(EntitlementStatus.TRIALING, EntitlementStatus.ACTIVE, EntitlementStatus.PAST_DUE);
       assertThat(current.getTrialEndsAt()).isEqualTo(trialEndsAt);
       assertThat(current.getTenantLimit()).isEqualTo(1);
       verify(entitlements, never())
@@ -193,8 +198,7 @@ class EntitlementServiceTest {
     for (Entitlement ended :
         List.of(
             trialEndingAt(OffsetDateTime.now().minusMinutes(1)),
-            stored(EntitlementStatus.CANCELED),
-            stored(EntitlementStatus.PAST_DUE))) {
+            stored(EntitlementStatus.CANCELED))) {
       EntitlementService service = service();
       when(entitlements.findEntityBySubjectIdAndProduct(ended.getSubjectId(), "clinic"))
           .thenReturn(Optional.of(ended));
@@ -209,6 +213,116 @@ class EntitlementServiceTest {
               });
       verify(entitlements, never()).saveAndFlush(any());
     }
+  }
+
+  @Test
+  void aPastDueSubscriptionKeepsGrantingAccessAndACancelledOneDoesNot() {
+    UUID pastDue = UUID.randomUUID();
+    UUID cancelled = UUID.randomUUID();
+    when(entitlements.findProjectedBySubjectIdAndProduct(pastDue, "clinic"))
+        .thenReturn(Optional.of(entitlement(pastDue, EntitlementStatus.PAST_DUE)));
+    when(entitlements.findProjectedBySubjectIdAndProduct(cancelled, "clinic"))
+        .thenReturn(Optional.of(entitlement(cancelled, EntitlementStatus.CANCELED)));
+
+    assertThat(service().require(pastDue, "clinic").status()).isEqualTo(EntitlementStatus.PAST_DUE);
+    assertThatThrownBy(() -> service().require(cancelled, "clinic"))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> assertThat(exception.code()).isEqualTo("entitlement_inactive"));
+  }
+
+  @Test
+  void aSubscriptionReplacesATrial() {
+    Entitlement trial = trialEndingAt(OffsetDateTime.now().plusDays(10));
+    UUID subjectId = trial.getSubjectId();
+    OffsetDateTime periodEndsAt = OffsetDateTime.parse("2026-12-26T09:00:00Z");
+    when(entitlements.findEntityBySubjectIdAndProduct(subjectId, "clinic"))
+        .thenReturn(Optional.of(trial));
+    when(entitlements.findProjectedBySubjectIdAndProduct(subjectId, "clinic"))
+        .thenReturn(Optional.of(entitlement(subjectId, EntitlementStatus.ACTIVE)));
+
+    SubscriptionChange change =
+        service()
+            .setSubscription(
+                subjectId,
+                "clinic",
+                new SubscriptionTerms(EntitlementStatus.ACTIVE, 2, 8, periodEndsAt));
+
+    assertThat(change.created()).isFalse();
+    assertThat(trial.getStatus()).isEqualTo(EntitlementStatus.ACTIVE);
+    assertThat(trial.getTrialEndsAt()).isNull();
+    assertThat(trial.getTenantLimit()).isEqualTo(2);
+    assertThat(trial.getSeatLimit()).isEqualTo(8);
+    assertThat(trial.getCurrentPeriodEndsAt()).isEqualTo(periodEndsAt);
+    verify(entitlements).saveAndFlush(trial);
+    verify(entitlements, never())
+        .insertSubscriptionIfAbsent(any(), any(), any(), any(), anyInt(), anyInt(), any());
+  }
+
+  @Test
+  void createsTheSubscriptionForASubjectWithoutAnEntitlement() {
+    UUID subjectId = UUID.randomUUID();
+    OffsetDateTime periodEndsAt = OffsetDateTime.parse("2026-12-26T09:00:00Z");
+    when(entitlements.findEntityBySubjectIdAndProduct(subjectId, "clinic"))
+        .thenReturn(Optional.empty());
+    when(entitlements.insertSubscriptionIfAbsent(
+            any(), eq(subjectId), eq("clinic"), eq("PAST_DUE"), eq(1), eq(3), eq(periodEndsAt)))
+        .thenReturn(1);
+    when(entitlements.findProjectedBySubjectIdAndProduct(subjectId, "clinic"))
+        .thenReturn(Optional.of(entitlement(subjectId, EntitlementStatus.PAST_DUE)));
+
+    SubscriptionChange change =
+        service()
+            .setSubscription(
+                subjectId,
+                "clinic",
+                new SubscriptionTerms(EntitlementStatus.PAST_DUE, 1, 3, periodEndsAt));
+
+    assertThat(change.created()).isTrue();
+    assertThat(change.entitlement().status()).isEqualTo(EntitlementStatus.PAST_DUE);
+    verify(entitlements, never()).saveAndFlush(any());
+  }
+
+  @Test
+  void replacesTheRowAConcurrentSubscriptionReportInsertedFirst() {
+    Entitlement concurrent = stored(EntitlementStatus.ACTIVE);
+    UUID subjectId = concurrent.getSubjectId();
+    when(entitlements.findEntityBySubjectIdAndProduct(subjectId, "clinic"))
+        .thenReturn(Optional.empty(), Optional.of(concurrent));
+    when(entitlements.insertSubscriptionIfAbsent(
+            any(), any(), any(), any(), anyInt(), anyInt(), any()))
+        .thenReturn(0);
+    when(entitlements.findProjectedBySubjectIdAndProduct(subjectId, "clinic"))
+        .thenReturn(Optional.of(entitlement(subjectId, EntitlementStatus.CANCELED)));
+
+    SubscriptionChange change =
+        service()
+            .setSubscription(
+                subjectId, "clinic", new SubscriptionTerms(EntitlementStatus.CANCELED, 1, 3, null));
+
+    assertThat(change.created()).isFalse();
+    assertThat(concurrent.getStatus()).isEqualTo(EntitlementStatus.CANCELED);
+    verify(entitlements).saveAndFlush(concurrent);
+  }
+
+  @Test
+  void refusesToReportATrialingSubscription() {
+    UUID subjectId = UUID.randomUUID();
+
+    assertThatThrownBy(
+            () ->
+                service()
+                    .setSubscription(
+                        subjectId,
+                        "clinic",
+                        new SubscriptionTerms(EntitlementStatus.TRIALING, 1, 3, null)))
+        .isInstanceOfSatisfying(
+            ApiException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(400);
+              assertThat(exception.code()).isEqualTo("entitlement_status_invalid");
+            });
+    verify(entitlements, never()).findEntityBySubjectIdAndProduct(any(), any());
   }
 
   @Test

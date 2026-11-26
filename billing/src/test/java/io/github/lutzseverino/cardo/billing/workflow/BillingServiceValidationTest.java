@@ -6,6 +6,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import io.github.lutzseverino.cardo.billing.mapper.EntitlementApplicationMapper;
 import io.github.lutzseverino.cardo.billing.model.CreateCheckoutSessionInput;
+import io.github.lutzseverino.cardo.billing.model.EntitlementStatus;
+import io.github.lutzseverino.cardo.billing.model.SubscriptionTerms;
 import io.github.lutzseverino.cardo.billing.model.TrialTerms;
 import io.github.lutzseverino.cardo.billing.provider.BillingProvider;
 import io.github.lutzseverino.cardo.billing.repository.EntitlementRepository;
@@ -64,6 +66,24 @@ class BillingServiceValidationTest {
                     UUID.randomUUID(),
                     "clinic",
                     new TrialTerms(14, 1, TrialTerms.MAX_SEAT_LIMIT + 1)))
+        .isInstanceOf(ConstraintViolationException.class);
+
+    verifyNoInteractions(entitlements);
+  }
+
+  @Test
+  void validatesSubscriptionTermsAtTheServiceBoundary() {
+    assertThatThrownBy(
+            () ->
+                entitlementService.setSubscription(
+                    UUID.randomUUID(), "clinic", new SubscriptionTerms(null, 1, 3, null)))
+        .isInstanceOf(ConstraintViolationException.class);
+    assertThatThrownBy(
+            () ->
+                entitlementService.setSubscription(
+                    UUID.randomUUID(),
+                    "clinic",
+                    new SubscriptionTerms(EntitlementStatus.ACTIVE, 0, 3, null)))
         .isInstanceOf(ConstraintViolationException.class);
 
     verifyNoInteractions(entitlements);

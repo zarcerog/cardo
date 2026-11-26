@@ -19,7 +19,9 @@ owns the UMA resource server, PAT, and introspection credential, while
 `reference-product-outbound` has no realm or Authorization Services roles and
 receives only the optional Invite `product-service` and Billing
 `entitlement:read` scopes. A product that starts trials also needs the Billing
-`entitlement:trial` role on its outbound client and in that Billing scope. The separate Identity client scope permits Invite's
+`entitlement:trial` role on its outbound client and in that Billing scope, and
+one that reports subscriptions it bills itself needs `entitlement:subscription`
+the same way. The separate Identity client scope permits Invite's
 `user:provision` token without giving the product an Identity service token.
 This prevents the automatic `uma_protection` role from appearing in scoped
 outbound tokens. These client names are fixture-local, not public Cardo

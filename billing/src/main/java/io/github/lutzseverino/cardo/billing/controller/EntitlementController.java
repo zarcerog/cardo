@@ -3,8 +3,10 @@ package io.github.lutzseverino.cardo.billing.controller;
 import io.github.lutzseverino.cardo.authorization.spring.AuthenticatedUserReader;
 import io.github.lutzseverino.cardo.billing.api.EntitlementsApi;
 import io.github.lutzseverino.cardo.billing.api.model.EntitlementResponse;
+import io.github.lutzseverino.cardo.billing.api.model.SetSubscriptionRequest;
 import io.github.lutzseverino.cardo.billing.api.model.StartTrialRequest;
 import io.github.lutzseverino.cardo.billing.mapper.EntitlementTransportMapper;
+import io.github.lutzseverino.cardo.billing.model.SubscriptionChange;
 import io.github.lutzseverino.cardo.billing.model.TrialStart;
 import io.github.lutzseverino.cardo.billing.service.EntitlementService;
 import jakarta.validation.Valid;
@@ -52,5 +54,16 @@ public class EntitlementController implements EntitlementsApi {
     TrialStart trial = entitlements.startTrial(subjectId, product, mapper.toTerms(request));
     return ResponseEntity.status(trial.started() ? HttpStatus.CREATED : HttpStatus.OK)
         .body(mapper.toResponse(trial.entitlement()));
+  }
+
+  @Override
+  public ResponseEntity<EntitlementResponse> setSubjectSubscription(
+      @PathVariable("subjectId") UUID subjectId,
+      @PathVariable("product") String product,
+      @Valid @RequestBody SetSubscriptionRequest request) {
+    SubscriptionChange change =
+        entitlements.setSubscription(subjectId, product, mapper.toTerms(request));
+    return ResponseEntity.status(change.created() ? HttpStatus.CREATED : HttpStatus.OK)
+        .body(mapper.toResponse(change.entitlement()));
   }
 }

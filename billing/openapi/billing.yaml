@@ -140,7 +140,8 @@ paths:
         - $ref: "#/components/parameters/Product"
       responses:
         "200":
-          description: Active entitlement, or trialing entitlement whose trial has not ended.
+          description: >-
+            Active or past-due entitlement, or trialing entitlement whose trial has not ended.
           content:
             application/json:
               schema:
@@ -158,7 +159,7 @@ paths:
       summary: Start a subject's trial of a product, once.
       description: >-
         Idempotent per subject and product. Creates a trialing entitlement when the subject has
-        none; returns a trialing or active entitlement unchanged; refuses with
+        none; returns a trialing, active or past-due entitlement unchanged; refuses with
         `trial_already_used` when the subject's entitlement for the product has ended.
       security:
         - bearerAuth: []
@@ -173,7 +174,8 @@ paths:
               $ref: "#/components/schemas/StartTrialRequest"
       responses:
         "200":
-          description: The subject already has a trialing or active entitlement; it is unchanged.
+          description: >-
+            The subject already has a trialing, active or past-due entitlement; it is unchanged.
           content:
             application/json:
               schema:
@@ -192,6 +194,46 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/Conflict"
+  /billing/subjects/{subjectId}/entitlements/{product}/subscription:
+    put:
+      tags: [Entitlements]
+      operationId: setSubjectSubscription
+      summary: Set a subject's entitlement to the subscription it paid for.
+      description: >-
+        Replaces the subject's entitlement for the product, a trialing one included, with the
+        status, limits and period end of a subscription the product's own payment provider
+        confirmed. Idempotent: the same body again leaves the entitlement unchanged. A
+        `past_due` subscription still grants access; a `canceled` one does not.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SubjectId"
+        - $ref: "#/components/parameters/Product"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetSubscriptionRequest"
+      responses:
+        "200":
+          description: The subject's entitlement now reflects the subscription.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementResponse"
+        "201":
+          description: The subject had no entitlement for the product; one was created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /billing/webhooks/stripe:
     post:
       tags: [Stripe Webhooks]
@@ -328,6 +370,33 @@ components:
           minimum: 1
           maximum: 10000
           example: 5
+    SetSubscriptionRequest:
+      type: object
+      required: [status, tenantLimit, seatLimit]
+      properties:
+        status:
+          type: string
+          enum: [active, past_due, canceled]
+          description: >-
+            `active` while paid for, `past_due` after a failed payment (still grants access),
+            `canceled` once cancelled.
+        tenantLimit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 1000
+          example: 1
+        seatLimit:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 10000
+          example: 3
+        currentPeriodEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the next payment is taken, or when a cancelled subscription stops.
     EntitlementResponse:
       type: object
       required: [id, subjectId, product, status, createdAt, updatedAt]
