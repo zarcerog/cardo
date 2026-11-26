@@ -11,6 +11,7 @@ import io.github.lutzseverino.cardo.billing.client.BillingEntitlement;
 import io.github.lutzseverino.cardo.billing.client.BillingEntitlementStatus;
 import io.github.lutzseverino.cardo.billing.client.BillingEntitlementsClient;
 import io.github.lutzseverino.cardo.billing.client.http.generated.EntitlementResponse;
+import io.github.lutzseverino.cardo.billing.client.http.generated.SetSubscriptionRequest;
 import io.github.lutzseverino.cardo.billing.client.http.generated.StartTrialRequest;
 import io.github.lutzseverino.cardo.billing.client.http.generated.api.EntitlementsApi;
 import java.time.Duration;
@@ -188,5 +189,54 @@ class HttpBillingEntitlementsClientTest {
     assertThat(entitlement.tenantLimit()).isEqualTo(1);
     assertThat(entitlement.seatLimit()).isEqualTo(5);
     assertThat(entitlement.trialEndsAt()).isEqualTo(createdAt.plusDays(14));
+  }
+
+  @Test
+  void setsASubscriptionAcrossTheGeneratedClientBoundary() {
+    EntitlementsApi entitlements = mock(EntitlementsApi.class);
+    HttpBillingEntitlementsClient client = new HttpBillingEntitlementsClient(entitlements);
+    UUID subjectId = UUID.randomUUID();
+    OffsetDateTime createdAt = OffsetDateTime.parse("2026-11-25T09:00:00Z");
+    OffsetDateTime periodEndsAt = createdAt.plusMonths(1);
+    SetSubscriptionRequest request =
+        new SetSubscriptionRequest()
+            .status(SetSubscriptionRequest.StatusEnum.PAST_DUE)
+            .tenantLimit(2)
+            .seatLimit(8)
+            .currentPeriodEndsAt(periodEndsAt);
+    when(entitlements.setSubjectSubscription(subjectId, "clinic", request))
+        .thenReturn(
+            new EntitlementResponse()
+                .id(UUID.randomUUID())
+                .subjectId(subjectId)
+                .product("clinic")
+                .status(EntitlementResponse.StatusEnum.PAST_DUE)
+                .tenantLimit(2)
+                .seatLimit(8)
+                .currentPeriodEndsAt(periodEndsAt)
+                .createdAt(createdAt)
+                .updatedAt(createdAt));
+
+    BillingEntitlement entitlement =
+        client.setSubscription(
+            subjectId, "clinic", BillingEntitlementStatus.PAST_DUE, 2, 8, periodEndsAt);
+
+    verify(entitlements).setSubjectSubscription(subjectId, "clinic", request);
+    assertThat(entitlement.status()).isEqualTo(BillingEntitlementStatus.PAST_DUE);
+    assertThat(entitlement.tenantLimit()).isEqualTo(2);
+    assertThat(entitlement.seatLimit()).isEqualTo(8);
+    assertThat(entitlement.currentPeriodEndsAt()).isEqualTo(periodEndsAt);
+  }
+
+  @Test
+  void refusesToReportATrialingSubscription() {
+    HttpBillingEntitlementsClient client =
+        new HttpBillingEntitlementsClient(mock(EntitlementsApi.class));
+
+    assertThatThrownBy(
+            () ->
+                client.setSubscription(
+                    UUID.randomUUID(), "clinic", BillingEntitlementStatus.TRIALING, 1, 3, null))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 }
